@@ -1,0 +1,4 @@
+/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/opt/clion/bin/ninja/linux/ninja -DCMAKE_CXX_COMPILER=/usr/bin/clang++ -G Ninja /home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/cmake-build-debug

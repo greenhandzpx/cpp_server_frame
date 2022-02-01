@@ -1,0 +1,33 @@
+logs:
+    - name: root
+      level: info
+      formatter: '%d%T%m%n'
+      appenders:
+          - type: FileLogAppender
+            file: log.txt
+          - type: StdoutLogAppender
+    - name: system
+      level: debug
+      formatter: '%d%T%m%n'
+      appenders:
+          - type: FileLogAppender
+            file: log.txt
+          - type: StdoutLogAppender
+
+system:
+  port: 9900
+  value: 15
+  int_vec:
+    - 20
+    - 40
+    - 80
+  int_list:
+    - 200
+    - 400
+    - 800
+
+class:
+  person:
+    name: Wolfgang
+    age: 20
+    sex: true
