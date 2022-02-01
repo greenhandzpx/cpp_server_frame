@@ -11,6 +11,7 @@
 #include <list>
 #include <string>
 #include <atomic>
+#include <variant>
 
 #include "fiber.h"
 #include "thread.h"
@@ -38,7 +39,7 @@ namespace sylar {
             bool need_tickle = false;
             {
                 MutexType::Lock lock(m_mutex);
-                need_tickle = schedule_nolock(fc, thread);
+                need_tickle = schedule_no_lock(fc, thread);
             }
             if (need_tickle) {
                 tickle();
@@ -53,7 +54,7 @@ namespace sylar {
                 MutexType::Lock lock(m_mutex);
                 while (begin != end) {
                     // 解引用得到元素，再取地址，从而使用第二个构造函数（swap版本）
-                    need_tickle = schedule_nolock(&*begin) || need_tickle;
+                    need_tickle = schedule_no_lock(&*begin) || need_tickle;
                     ++begin;
                 }
             }
@@ -73,12 +74,14 @@ namespace sylar {
 
     private:
         template<typename Fiber_or_Cb>
-        bool schedule_nolock(Fiber_or_Cb fc, int thread = -1)
+        bool schedule_no_lock(Fiber_or_Cb fc, int thread = -1)
         {
             // 若m_fibers为空，说明此时没有协程任务，则插入一个任务并返回true
             bool need_tickle = m_fibers.empty();
             Fiber_and_Thread ft(fc, thread);
-            if (ft.fiber || ft.cb) {
+            //if (ft.fiber || ft.cb)
+            if (std::holds_alternative<Fiber::ptr>(ft.fiber_or_cb) ||
+                    std::holds_alternative<std::function<void()>>(ft.fiber_or_cb)){
                 m_fibers.push_back(ft);
             }
             return need_tickle;
@@ -92,29 +95,33 @@ namespace sylar {
 
     private:
         struct Fiber_and_Thread {
-            Fiber::ptr fiber;
-            std::function<void()> cb;
+            // 可以存一个协程，也可以只存一个函数指针
+            std::variant<Fiber::ptr, std::function<void()>> fiber_or_cb;
+//            Fiber::ptr fiber;
+//            std::function<void()> cb;
             int thread;
 
             Fiber_and_Thread(Fiber::ptr f, int thr)
-                : fiber(std::move(f)), thread(thr)
+                : fiber_or_cb(std::move(f)), thread(thr)
             {}
             // 此处传智能指针的指针的目的是：当我们不需要传入实参的引用时，可以通过swap,
             // 从而使协程对象的引用计数不发生改变
             Fiber_and_Thread(Fiber::ptr* f, int thr)
                 : thread(thr)
             {
-                fiber.swap(*f);
+                std::get<0>(fiber_or_cb).swap(*f);
+                //fiber.swap(*f);
             }
 
             Fiber_and_Thread(std::function<void()> f, int thr)
-                : cb(std::move(f)), thread(thr)
+                : fiber_or_cb(std::move(f)), thread(thr)
             {}
 
             Fiber_and_Thread(std::function<void()>* f, int thr)
                 : thread(thr)
             {
-                cb.swap(*f);
+                std::get<1>(fiber_or_cb).swap(*f);
+                //cb.swap(*f);
             }
             // 定义默认构造函数的原因是：
             // stl容器初始化非空时，里面的元素都是以默认构造函数构造的
@@ -123,8 +130,10 @@ namespace sylar {
 
             void reset()
             {
-                fiber = nullptr;
-                cb = nullptr;
+                fiber_or_cb.emplace<0>(nullptr);
+                fiber_or_cb.emplace<1>(nullptr);
+//                fiber = nullptr;
+//                cb = nullptr;
                 thread = -1;
             }
         };

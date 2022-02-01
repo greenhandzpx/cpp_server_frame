@@ -6,7 +6,7 @@ CXX_DEFINES =
 
 CXX_INCLUDES = -I/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/. -I/home/greenhandzpx/Downloads/yaml-cpp/include
 
-CXX_FLAGS =  -rdynamic -O0 -g -std=c++11 -Wall -Wno-deprecated -Wno-unused-function
+CXX_FLAGS =  -rdynamic -O0 -g -std=c++17 -Wall -Wno-deprecated -Wno-unused-function
 
 # Custom defines: CMakeFiles/test_config.dir/tests/test_config.cc.o_DEFINES = __FILE__="tests/test_config.cc"
 

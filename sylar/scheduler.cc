@@ -24,7 +24,7 @@ namespace sylar {
             SYLAR_ASSERT(GetThis() == nullptr)
             t_scheduler = this;
 
-            m_root_fiber.reset(new Fiber(std::bind(&Scheduler::run, this), 0, true));
+            m_root_fiber.reset(new Fiber([this] { run(); }, 0, true));
             Thread::SetName(name);
 
             t_fiber = m_root_fiber.get();
@@ -151,6 +151,7 @@ namespace sylar {
         setThis();
         if (sylar::GetThreadId() != m_root_thread_id) {
             // 排除掉协程调度器所在线程的任务协程
+            // 获取当前线程正在执行的协程
             t_fiber = Fiber::GetThis().get();
         }
 
@@ -165,7 +166,9 @@ namespace sylar {
             bool tickle_me = false;
 
             MutexType::Lock lock(m_mutex);
+            //SYLAR_LOG_DEBUG(g_logger) << "before it. ";
             auto it = m_fibers.begin();
+            //SYLAR_LOG_DEBUG(g_logger) << "after it. ";
             while (it != m_fibers.end()) {
                 if (it->thread != -1 &&
                     it->thread != GetThreadId()) {
@@ -176,11 +179,20 @@ namespace sylar {
                     continue;
                 }
 
-                SYLAR_ASSERT(it->fiber || it->cb)
-                if (it->fiber && it->fiber->getState() == Fiber::EXEC) {
-                    // 该协程任务正在执行中则跳过
-                    ++it;
-                    continue;
+                //SYLAR_ASSERT(it->fiber || it->cb)
+                SYLAR_ASSERT(std::holds_alternative<Fiber::ptr>(it->fiber_or_cb) ||
+                            std::holds_alternative<std::function<void()>>(it->fiber_or_cb))
+//                if (it->fiber && it->fiber->getState() == Fiber::EXEC) {
+//                    // 该协程任务正在执行中则跳过
+//                    ++it;
+//                    continue;
+//                }
+                if (auto f = std::get_if<0>(&(it->fiber_or_cb))) {
+                    if ((*f)->getState() == Fiber::EXEC) {
+                        // 该协程任务正在执行中则跳过
+                        ++it;
+                        continue;
+                    }
                 }
 
                 ft = *it;
@@ -196,43 +208,72 @@ namespace sylar {
             if (tickle_me) {
                 tickle();
             }
-            if (ft.fiber && ft.fiber->getState() != Fiber::TERM) {
-                // 如果是协程并且该协程还没有结束,
-                // 则执行该协程，标记该线程为活跃状态
-                ++m_active_thread_count;
-                ft.fiber->swapIn();
-                --m_active_thread_count;
+            if (std::get_if<0>(&ft.fiber_or_cb) &&
+                    std::get<0>(ft.fiber_or_cb))
+            {
+                auto it_fiber = std::get_if<0>(&ft.fiber_or_cb);
+                if ((*it_fiber)->getState() != Fiber::TERM) {
+                    // 如果是协程并且该协程还没有结束,
+                    // 则执行该协程，标记该线程为活跃状态
+                    ++m_active_thread_count;
+                    // 将该协程与当前线程正在执行的协程交换
+                    (*it_fiber)->swapIn();
+                    --m_active_thread_count;
 
-                if (ft.fiber->getState() == Fiber::READY) {
-                    // 如果该协程调用了“Yield_to_Ready"，则说明还有任务要做
-                    // 则重新把该协程丢进协程队列
-                    schedule(ft.fiber);
-                } else if (ft.fiber->getState() != Fiber::TERM
-                        || ft.fiber->getState() != Fiber::EXCPT)
-                {
-                    // 如果该协程还没有结束，则设为挂起状态
-                    ft.fiber->setState(Fiber::HOLD);
+                    if ((*it_fiber)->getState() == Fiber::READY) {
+                        // 如果该协程调用了“Yield_to_Ready"，则说明还有任务要做
+                        // 则重新把该协程丢进协程队列
+                        schedule((*it_fiber));
+                    } else if ((*it_fiber)->getState() != Fiber::TERM
+                               || (*it_fiber)->getState() != Fiber::EXCPT)
+                    {
+                        // 如果该协程还没有结束，则设为挂起状态
+                        (*it_fiber)->setState(Fiber::HOLD);
+                    }
+                    ft.reset();
+
                 }
-                ft.reset();
+//            if (ft.fiber && ft.fiber->getState() != Fiber::TERM) {
+//                // 如果是协程并且该协程还没有结束,
+//                // 则执行该协程，标记该线程为活跃状态
+//                ++m_active_thread_count;
+//                ft.fiber->swapIn();
+//                --m_active_thread_count;
+//
+//                if (ft.fiber->getState() == Fiber::READY) {
+//                    // 如果该协程调用了“Yield_to_Ready"，则说明还有任务要做
+//                    // 则重新把该协程丢进协程队列
+//                    schedule(ft.fiber);
+//                } else if (ft.fiber->getState() != Fiber::TERM
+//                        || ft.fiber->getState() != Fiber::EXCPT)
+//                {
+//                    // 如果该协程还没有结束，则设为挂起状态
+//                    ft.fiber->setState(Fiber::HOLD);
+//                }
+//                ft.reset();
 
-            } else if (ft.cb) {
+            //} else if (ft.cb) {
+            } else if (std::get_if<1>(&ft.fiber_or_cb) &&
+                        std::get<1>(ft.fiber_or_cb)) {
                 // 如果是回调
                 // 则用cb_fiber来接收这个回调
+                auto it_cb = std::get_if<1>(&ft.fiber_or_cb);
                 if (cb_fiber) {
                     // 如果cb_fiber已经初始化过
-                    cb_fiber->reset(ft.cb);
+                    cb_fiber->reset(*it_cb);
                 } else {
-                    cb_fiber.reset(new Fiber(ft.cb));
+                    cb_fiber.reset(new Fiber(*it_cb));
                 }
                 ft.reset();
                 ++m_active_thread_count;
+                SYLAR_ASSERT2(cb_fiber->m_cb, "No cb!")
                 cb_fiber->swapIn();
                 --m_active_thread_count;
 
                 if (cb_fiber->getState() == Fiber::READY) {
                     schedule(cb_fiber);
                 } else if (cb_fiber->getState() == Fiber::TERM
-                        || cb_fiber->getState() == Fiber::EXCPT)
+                           || cb_fiber->getState() == Fiber::EXCPT)
                 {
                     // 该协程已经结束
                     cb_fiber->reset(nullptr);

@@ -6,7 +6,7 @@ CXX_DEFINES = -Dsylar_EXPORTS
 
 CXX_INCLUDES = -I/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/. -I/home/greenhandzpx/Downloads/yaml-cpp/include
 
-CXX_FLAGS =  -rdynamic -O0 -g -std=c++11 -Wall -Wno-deprecated -Wno-unused-function -fPIC
+CXX_FLAGS =  -rdynamic -O0 -g -std=c++17 -Wall -Wno-deprecated -Wno-unused-function -fPIC
 
 # Custom defines: CMakeFiles/sylar.dir/sylar/log.cc.o_DEFINES = __FILE__="sylar/log.cc"
 

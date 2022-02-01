@@ -20,9 +20,10 @@ void test_fiber()
 }
 int main()
 {
-    sylar::Scheduler sc(1, true, "scooo");
+    sylar::Scheduler sc(3, true, "scooo");
     //sylar::Fiber::ptr one_sub_fiber(new sylar::Fiber(&test_fiber));
     sc.schedule(&test_fiber);
+    //return 0;
     sc.start();
 
     sc.stop();
