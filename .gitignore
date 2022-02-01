@@ -5,3 +5,7 @@ bin/
 build/
 
 .idea
+
+cmake-build-debug/
+
+lib/
