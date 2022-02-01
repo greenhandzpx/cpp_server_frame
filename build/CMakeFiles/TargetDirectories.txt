@@ -1,9 +1,0 @@
-/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/build/CMakeFiles/sylar.dir
-/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/build/CMakeFiles/test.dir
-/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/build/CMakeFiles/test_config.dir
-/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/build/CMakeFiles/test_thread.dir
-/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/build/CMakeFiles/test_util.dir
-/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/build/CMakeFiles/test_fiber.dir
-/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/build/CMakeFiles/test_scheduler.dir
-/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/build/CMakeFiles/edit_cache.dir
-/home/greenhandzpx/CodeField/codeCpp/CppRepository/Sylar/build/CMakeFiles/rebuild_cache.dir
