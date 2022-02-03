@@ -97,7 +97,7 @@ namespace sylar {
             }
         }
 
-        bool exit_on_this_fiber = false;
+        //bool exit_on_this_fiber = false;
         if (m_root_thread_id != -1) {
             // 如果有将协程调度器所在线程算进去
             // 那么必须在协程调度器所在线程内进行停止操作

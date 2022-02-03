@@ -45,7 +45,7 @@ namespace sylar {
         Backtrace(bt, size, skip);
         std::stringstream ss;
         for (const auto& i: bt) {
-            ss << prefix << i <<std::endl;
+            ss << prefix << i << std::endl;
         }
         return ss.str();
     }
