@@ -29,6 +29,9 @@ namespace sylar {
 
         const std::string& getName() { return m_name; }
 
+        // 该属性表示返回值不能被忽略
+        [[nodiscard]] bool hasIdleThread() const { return m_idle_thread_count > 0; }
+
         void start();
         void stop();
 
@@ -109,6 +112,8 @@ namespace sylar {
             Fiber_and_Thread(Fiber::ptr* f, int thr)
                 : thread(thr)
             {
+                // 这里可能有点问题，感觉这么写很没必要
+                fiber_or_cb = (Fiber::ptr) nullptr;
                 std::get<0>(fiber_or_cb).swap(*f);
                 //fiber.swap(*f);
             }
@@ -120,6 +125,7 @@ namespace sylar {
             Fiber_and_Thread(std::function<void()>* f, int thr)
                 : thread(thr)
             {
+                fiber_or_cb = (std::function<void()>) nullptr;
                 std::get<1>(fiber_or_cb).swap(*f);
                 //cb.swap(*f);
             }

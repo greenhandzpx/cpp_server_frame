@@ -23,7 +23,8 @@ set(LIB_SRC
         sylar/config.cc
         sylar/thread.cc
         sylar/fiber.cc
-        sylar/scheduler.cc)
+        sylar/scheduler.cc
+        sylar/iomanager.cc)
 
 add_library(sylar SHARED ${LIB_SRC})
 # 调用util.cmake里的函数强制修改__FILE__
@@ -62,6 +63,11 @@ add_executable(test_scheduler tests/test_scheduler.cc)
 add_dependencies(test_scheduler sylar)
 target_link_libraries(test_scheduler ${LIB_LIB})
 force_redefine_file_macro_for_sources(test_scheduler)
+
+add_executable(test_iomanager tests/test_iomanager.cc)
+add_dependencies(test_iomanager sylar)
+target_link_libraries(test_iomanager ${LIB_LIB})
+force_redefine_file_macro_for_sources(test_iomanager)
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)

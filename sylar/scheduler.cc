@@ -36,10 +36,14 @@ namespace sylar {
             m_root_thread_id = -1;
         }
         m_thread_count = thread_count;
+
+        //start();
     }
 
     Scheduler::~Scheduler()
     {
+        //stop();
+
         SYLAR_ASSERT(m_stopping)
         if (t_scheduler == this) {
             t_scheduler = nullptr;
@@ -71,7 +75,7 @@ namespace sylar {
         m_threads.resize(m_thread_count);
         for (size_t i = 0; i < m_thread_count; ++i) {
             // 每个线程都去执行run方法
-            m_threads[i].reset(new Thread(std::bind(&Scheduler::run, this),
+            m_threads[i].reset(new Thread([this] { run(); },
                                           m_name + "_" + std::to_string(i)));
             m_thread_ids.emplace_back(m_threads[i]->getId());
         }
@@ -156,7 +160,7 @@ namespace sylar {
         }
 
         // 空闲协程，用来占住cpu
-        Fiber::ptr idle_fiber(new Fiber(std::bind(&Scheduler::idle, this)));
+        Fiber::ptr idle_fiber(new Fiber([this] { idle(); }));
         Fiber::ptr cb_fiber;
 
         Fiber_and_Thread ft;

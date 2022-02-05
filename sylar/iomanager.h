@@ -15,8 +15,8 @@ namespace sylar {
 
         enum Event {
             NONE = 0x0,
-            READ = 0x1,
-            WRITE = 0x2
+            READ = 0x1, // EPOLLIN
+            WRITE = 0x4  // EPOLLOUT
         };
 
     private:
@@ -32,7 +32,7 @@ namespace sylar {
 
             EventContext& getContext(Event event);
 
-            void resetContext(EventContext& event_ctx);
+            static void resetContext(EventContext& event_ctx);
 
             void triggerEvent(Event event);
 

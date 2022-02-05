@@ -19,19 +19,19 @@ namespace sylar {
         SYLAR_ASSERT(m_epfd > 0)
 
         int rt = pipe(m_tickle_fds);
-        SYLAR_ASSERT(rt > 0)
+        SYLAR_ASSERT(rt == 0)
 
         epoll_event event{}; // 某个事件的配置
         memset(&event, 0, sizeof(epoll_event));
         event.events = EPOLLIN | EPOLLET; // 将事件设为可读和边缘触发
-        event.data.fd = m_tickle_fds[0]; // 把事件句柄与管道的写入端连起来
+        event.data.fd = m_tickle_fds[0]; // 把事件句柄与管道的读端连起来
 
-        rt = fcntl(m_tickle_fds[0], F_SETFL, O_NONBLOCK); // 将写入端设成非阻塞
-        SYLAR_ASSERT(rt > 0)
+        rt = fcntl(m_tickle_fds[0], F_SETFL, O_NONBLOCK); // 将读端设成非阻塞
+        SYLAR_ASSERT(rt != -1)
 
         // 将m_tickle_fds[0]句柄对应的事件，按照event中的设定，加入到m_epfd中，
         rt = epoll_ctl(m_epfd, EPOLL_CTL_ADD, m_tickle_fds[0], &event);
-        SYLAR_ASSERT(rt > 0)
+        SYLAR_ASSERT(rt == 0)
 
         context_resize(32);
 
@@ -104,6 +104,7 @@ namespace sylar {
         ++m_pending_event_count;
 
         fd_ctx->m_events = (Event) (fd_ctx->m_events | event);
+        SYLAR_LOG_DEBUG(g_logger) << "fd_ctx->m_events: " << fd_ctx->m_events;
         FdContext::EventContext &event_ctx = fd_ctx->getContext(event);
         // 确保新添加的事件不存在调度器或者协程回调
         SYLAR_ASSERT(!event_ctx.scheduler
@@ -119,7 +120,7 @@ namespace sylar {
             // 没有则将当前线程的协程赋给该事件
             event_ctx.fiber = Fiber::GetThis();
             // 确保当前协程正在执行
-            SYLAR_ASSERT(event_ctx.fiber->getState() == Fiber::EXEC);
+            SYLAR_ASSERT(event_ctx.fiber->getState() == Fiber::EXEC)
         }
         return 0;
     }
@@ -258,6 +259,131 @@ namespace sylar {
         return dynamic_cast<IOManager*>(Scheduler::GetThis());
     }
 
+    void IOManager::tickle() {
+        if (hasIdleThread()) {
+            // 有空闲线程才处理任务
+            // 发送消息唤醒
+            int rt = write(m_tickle_fds[1], "T", 1);
+            SYLAR_ASSERT(rt == 1)
+        }
+    }
+
+    bool IOManager::stopping() {
+        return Scheduler::stopping()
+            && m_pending_event_count == 0;
+    }
+
+    void IOManager::idle() {
+        // 定义堆数组的原因是协程不适合定义太大的栈数组（协程拥有的栈空间有限）
+        auto events = new epoll_event[64]();
+        // 由于智能指针不能处理数组，需要我们在析构的时候手动删除
+        // 定义该智能指针的目的是方便自动析构
+        std::shared_ptr<epoll_event> shared_events(events, [](epoll_event* ptr){
+            delete[] ptr;
+        });
+
+
+        while(true) {
+            if (stopping()) {
+                SYLAR_LOG_INFO(g_logger) << "name=" << Scheduler::getName()
+                    << " idle stopping, exit.";
+                break;
+            }
+
+            int rt;
+            do {
+                static const int MAX_TIMEOUT = 5000; // 5000ms
+                rt = epoll_wait(m_epfd, events, 64, MAX_TIMEOUT);
+
+                if (rt < 0 && errno == EINTR) {
+                    // 如果没有事件并且是EINTR,说明是被中断了，则接着循环
+                    continue;
+                } else {
+                    // 不然跳出循环开始处理所有发出响应的事件
+                    break;
+                }
+            } while (true);
+
+            // 遍历所有待处理的事件句柄
+            SYLAR_LOG_DEBUG(g_logger) << "Epoll wait: rt=" << rt;
+            for (int i = 0; i < rt; ++i) {
+                epoll_event& event = events[i];
+
+                SYLAR_LOG_DEBUG(g_logger) << "Deal with event fd=" << event.data.fd;
+
+                if (event.data.fd == m_tickle_fds[0]) {
+                    // 说明该事件是被tickle唤醒的
+                    uint8_t dummy;
+                    // 可能有多次，当作一次处理，所以得读干净
+                    // 并且由于是边沿触发，下次epoll_wait就不会再来一次了
+                    while (read(m_tickle_fds[0], &dummy, 1) == 1);
+                    continue;
+                }
+
+                auto fd_ctx = (FdContext* )event.data.ptr;
+                SYLAR_LOG_DEBUG(g_logger) << "new fd_ctx->m_events: " << fd_ctx->m_events;
+                FdContext::MutexType::Lock lock(fd_ctx->m_mutex);
+                if (event.events & (EPOLLERR | EPOLLHUP)) {
+                    // 如果事件里有错误或者中断
+                    SYLAR_LOG_DEBUG(g_logger) << "ERR or HUP";
+                    event.events |= (EPOLLIN | EPOLLOUT) & fd_ctx->m_events;
+                }
+                int real_events = NONE;
+                if (event.events & EPOLLIN) {
+                    // 有读事件
+                    real_events |= READ;
+                }
+                if (event.events & EPOLLOUT) {
+                    // 有写事件
+                    real_events |= WRITE;
+                }
+
+                if ((fd_ctx->m_events & real_events) == NONE) {
+                    // 说明事件已经被别人处理完了
+                    continue;
+                }
+
+                // 修改该fd对应的事件设置
+                // 剩余事件
+                int left_events = (fd_ctx->m_events & (~real_events));
+                int op = left_events ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
+                event.events = EPOLLET | left_events;
+
+
+                int rt2 = epoll_ctl(m_epfd, op, fd_ctx->fd, &event);
+                if (rt2) {
+                    SYLAR_LOG_ERROR(g_logger) << "epoll_ctl(" << m_epfd << ", "
+                                              << op << ", " << fd_ctx->fd << ", " << event.events
+                                              << "): " << rt << " (" << errno << ") ("
+                                              << strerror(errno) << ") ";
+                    continue;
+                }
+
+                if (real_events & READ) {
+                    SYLAR_LOG_DEBUG(g_logger) << "Start to trigger read event..";
+                    fd_ctx->triggerEvent(READ);
+                    --m_pending_event_count;
+                }
+                if (real_events & WRITE) {
+                    SYLAR_LOG_DEBUG(g_logger) << "Start to trigger write event..";
+                    fd_ctx->triggerEvent(WRITE);
+                    --m_pending_event_count;
+                }
+            }
+
+            Fiber::ptr cur = Fiber::GetThis();
+            auto raw_ptr = cur.get();
+            cur.reset();
+
+            SYLAR_LOG_DEBUG(g_logger) << "Next i'm gonna swap out!";
+            // 将当前协程切出去
+            raw_ptr->swapOut();
+        }
+
+
+    }
+
+
     IOManager::FdContext::EventContext&
     IOManager::FdContext::getContext(IOManager::Event event)
     {
@@ -282,6 +408,7 @@ namespace sylar {
     void IOManager::FdContext::triggerEvent(IOManager::Event event)
     {
         // 先确认该事件存在
+        SYLAR_LOG_DEBUG(g_logger) << "m_events: " << m_events << " event: " << event;
         SYLAR_ASSERT(m_events & event)
         // 清除该事件
         m_events = (Event)(m_events & (~event));
