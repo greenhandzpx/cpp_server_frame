@@ -6,9 +6,11 @@
 #define SYLAR_IOMANAGER_H
 
 #include "scheduler.h"
+#include "timer.h"
+
 
 namespace sylar {
-    class IOManager: public Scheduler {
+    class IOManager: public Scheduler, public TimerManager{
     public:
         typedef std::shared_ptr<IOManager::ptr> ptr;
         typedef RWMutex RWMutexType;
@@ -56,6 +58,7 @@ namespace sylar {
         bool cancel_event(int fd, Event event);
         bool cancel_all(int fd);
 
+
     public:
         static IOManager* GetThis();
 
@@ -65,6 +68,10 @@ namespace sylar {
         void tickle() override;
         bool stopping() override;
         void idle() override;
+
+        void on_timer_insert_at_front() override;
+
+        //bool has_timer();
 
     private:
         int m_epfd = 0; // epoll实例的fd

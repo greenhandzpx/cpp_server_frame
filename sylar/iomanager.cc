@@ -270,7 +270,8 @@ namespace sylar {
 
     bool IOManager::stopping() {
         return Scheduler::stopping()
-            && m_pending_event_count == 0;
+            && m_pending_event_count == 0
+           /* && !has_timer()*/;
     }
 
     void IOManager::idle() {
@@ -285,9 +286,13 @@ namespace sylar {
 
         while(true) {
             if (stopping()) {
-                SYLAR_LOG_INFO(g_logger) << "name=" << Scheduler::getName()
-                    << " idle stopping, exit.";
-                break;
+                auto next_timeout = get_next_timeout();
+                if (next_timeout == ~0ull) {
+                    // 说明此时set里没有定时器了
+                    SYLAR_LOG_INFO(g_logger) << "name=" << Scheduler::getName()
+                                             << " idle stopping, exit.";
+                    break;
+                }
             }
 
             int rt;
@@ -383,6 +388,11 @@ namespace sylar {
 
     }
 
+    void IOManager::on_timer_insert_at_front()
+    {
+        // 当新添加的计时器刚好是set里的首个元素时
+        tickle();
+    }
 
     IOManager::FdContext::EventContext&
     IOManager::FdContext::getContext(IOManager::Event event)

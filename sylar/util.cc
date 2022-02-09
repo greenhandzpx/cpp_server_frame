@@ -49,4 +49,18 @@ namespace sylar {
         }
         return ss.str();
     }
+
+    uint64_t Get_current_ms()
+    {
+        struct timeval tv{};
+        gettimeofday(&tv, nullptr);
+        return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    }
+
+    uint64_t Get_current_us()
+    {
+        struct timeval tv{};
+        gettimeofday(&tv, nullptr);
+        return tv.tv_sec * 1000 * 1000 + tv.tv_usec;
+    }
 }
