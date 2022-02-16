@@ -259,6 +259,7 @@ namespace sylar {
         return dynamic_cast<IOManager*>(Scheduler::GetThis());
     }
 
+
     void IOManager::tickle() {
         if (hasIdleThread()) {
             // 有空闲线程才处理任务
@@ -268,10 +269,19 @@ namespace sylar {
         }
     }
 
+    bool IOManager::stopping(uint64_t& timeout)
+    {
+        timeout = get_next_timeout();
+        //SYLAR_LOG_DEBUG(g_logger) << "stopping timeout: " << timeout
+        //    << "pending_events: " << m_pending_event_count;
+        return timeout == ~0ull
+               && m_pending_event_count == 0
+               && Scheduler::stopping();
+    }
+
     bool IOManager::stopping() {
-        return Scheduler::stopping()
-            && m_pending_event_count == 0
-           /* && !has_timer()*/;
+        uint64_t timeout = 0;
+        return stopping(timeout);
     }
 
     void IOManager::idle() {
@@ -285,20 +295,30 @@ namespace sylar {
 
 
         while(true) {
-            if (stopping()) {
-                auto next_timeout = get_next_timeout();
-                if (next_timeout == ~0ull) {
-                    // 说明此时set里没有定时器了
-                    SYLAR_LOG_INFO(g_logger) << "name=" << Scheduler::getName()
-                                             << " idle stopping, exit.";
-                    break;
-                }
+            uint64_t next_timeout;
+            if (stopping(next_timeout)) {
+                // stopping函数里修改了next_timeout的值
+                // 说明此时set里没有定时器了
+                SYLAR_LOG_INFO(g_logger) << "name=" << Scheduler::getName()
+                                         << " idle stopping, exit.";
+                break;
             }
 
             int rt;
             do {
+                // 从定时器中取出的最近一次需要执行的时间，并且跟最大超时时间比较
+                //next_timeout = get_next_timeout();
                 static const int MAX_TIMEOUT = 5000; // 5000ms
-                rt = epoll_wait(m_epfd, events, 64, MAX_TIMEOUT);
+                if (next_timeout == ~0ull) {
+                    next_timeout = MAX_TIMEOUT;
+                } else {
+                    next_timeout = MAX_TIMEOUT > next_timeout ? next_timeout : MAX_TIMEOUT;
+                }
+                SYLAR_LOG_DEBUG(g_logger) << "Next_timeout: " << next_timeout;
+
+
+                // 核心函数！
+                rt = epoll_wait(m_epfd, events, 64, (int)next_timeout);
 
                 if (rt < 0 && errno == EINTR) {
                     // 如果没有事件并且是EINTR,说明是被中断了，则接着循环
@@ -309,12 +329,24 @@ namespace sylar {
                 }
             } while (true);
 
+            //SYLAR_LOG_DEBUG(g_logger) << "Get out of epoll_wait!";
+
+            // 找出所有已经超时的定时器，触发一遍
+            std::vector<std::function<void()>>  cbs;
+            list_expired_cbs(cbs);
+            if (!cbs.empty()) {
+                // 批量将任务加入调度器
+                SYLAR_LOG_DEBUG(g_logger) << "Schedule timer cbs.";
+                schedule(cbs.begin(), cbs.end());
+                cbs.clear();
+            }
+
             // 遍历所有待处理的事件句柄
             SYLAR_LOG_DEBUG(g_logger) << "Epoll wait: rt=" << rt;
             for (int i = 0; i < rt; ++i) {
                 epoll_event& event = events[i];
 
-                SYLAR_LOG_DEBUG(g_logger) << "Deal with event fd=" << event.data.fd;
+                //SYLAR_LOG_DEBUG(g_logger) << "Deal with event fd=" << event.data.fd;
 
                 if (event.data.fd == m_tickle_fds[0]) {
                     // 说明该事件是被tickle唤醒的
@@ -380,7 +412,7 @@ namespace sylar {
             auto raw_ptr = cur.get();
             cur.reset();
 
-            SYLAR_LOG_DEBUG(g_logger) << "Next i'm gonna swap out!";
+            //SYLAR_LOG_DEBUG(g_logger) << "Next i'm gonna swap out!";
             // 将当前协程切出去
             raw_ptr->swapOut();
         }

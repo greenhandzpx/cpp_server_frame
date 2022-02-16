@@ -93,6 +93,8 @@ namespace sylar {
     {
         --s_fiber_count;
         if (m_stack) {
+            SYLAR_LOG_DEBUG(g_logger) << "One sub fiber will die, id=" << m_id
+                << ", state=" << m_state;
             SYLAR_ASSERT(m_state == INIT ||
                          m_state == TERM ||
                          m_state == EXCPT)
@@ -157,6 +159,8 @@ namespace sylar {
 //        if (Scheduler::GetMainFiber() == t_threadFiber.get().get()) {
 //            SYLAR_LOG_DEBUG(g_logger) << "Equal !";
 //        }
+
+        // 调用swapIn函数的协程应该是root_fiber(或者其他线程），所以将root_fiber切出去，将this指针对应的fiber切进来
         if (swapcontext(&(Scheduler::GetMainFiber()->m_ctx), &m_ctx)) {
             SYLAR_ASSERT2(false, "SwapContext error!")
         }
@@ -175,6 +179,11 @@ namespace sylar {
 
     }
 
+    void Fiber::setState(State state)
+    {
+        //SYLAR_LOG_DEBUG(g_logger) << "Change state to " << state << ", id=" << m_id;
+        m_state = state;
+    }
     // 设置当前线程执行的协程
     void Fiber::SetThis(Fiber *f)
     {
@@ -206,6 +215,7 @@ namespace sylar {
     void Fiber::Yield_to_Hold()
     {
         Fiber::ptr cur = GetThis();
+        SYLAR_LOG_DEBUG(g_logger) << "Change state to HOLD, id=" << cur->getId();
         cur->m_state = HOLD;
         cur->swapOut();
     }
@@ -225,7 +235,7 @@ namespace sylar {
         try {
             cur->m_cb();
             cur->m_cb = nullptr;
-            SYLAR_LOG_DEBUG(g_logger) << "Change state, id=" << cur->getId();
+            SYLAR_LOG_DEBUG(g_logger) << "Change state to TERM, id=" << cur->getId();
             cur->m_state = TERM;
         } catch (std::exception& ex) {
             cur->m_state = EXCPT;

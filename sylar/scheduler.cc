@@ -1,6 +1,7 @@
 #include "scheduler.h"
 #include "log.h"
 #include "macro.h"
+#include "hook.h"
 
 namespace sylar {
 
@@ -93,8 +94,9 @@ namespace sylar {
                          && (m_root_fiber->getState() == Fiber::TERM
                          || m_root_fiber->getState() == Fiber::INIT))
         {
-            SYLAR_LOG_INFO(g_logger) << this->m_name << " stopped";
-            m_stopping = true;
+            SYLAR_LOG_DEBUG(g_logger) << this->m_name << " stopped. The count of m_fibers: "
+                << m_fibers.size();
+            //m_stopping = true;
 
             if (stopping()) {
                 return;
@@ -110,6 +112,13 @@ namespace sylar {
             SYLAR_ASSERT(GetThis() != this)
         }
 
+        if (m_root_fiber) {
+            // 在这个地方才调用协程调度器所在线程的子协程的回调
+            if (!stopping()) {
+                SYLAR_LOG_DEBUG(g_logger) << "Now call the root fiber";
+                m_root_fiber->call();
+            }
+        }
         m_stopping = true;
         // 每个线程都去tickle一次，通知他们停止
         for (size_t i = 0; i < m_thread_count; ++i) {
@@ -120,13 +129,13 @@ namespace sylar {
             tickle();
         }
 
-        if (m_root_fiber) {
-            // 在这个地方才调用协程调度器所在线程的子协程的回调
-            if (!stopping()) {
-                SYLAR_LOG_DEBUG(g_logger) << "Now call the root fiber";
-                m_root_fiber->call();
-            }
-        }
+//        if (m_root_fiber) {
+//            // 在这个地方才调用协程调度器所在线程的子协程的回调
+//            if (!stopping()) {
+//                SYLAR_LOG_DEBUG(g_logger) << "Now call the root fiber";
+//                m_root_fiber->call();
+//            }
+//        }
 
         std::vector<Thread::ptr> thrs;
         {
@@ -143,6 +152,7 @@ namespace sylar {
         }
 
     }
+
     void Scheduler::setThis()
     {
         t_scheduler = this;
@@ -151,6 +161,8 @@ namespace sylar {
     void Scheduler::run()
     {
         // 每个新线程都会运行该函数
+        set_hook_enable(true);
+
         // 设置当前线程的scheduler
         setThis();
         if (sylar::GetThreadId() != m_root_thread_id) {
@@ -200,14 +212,16 @@ namespace sylar {
                 }
 
                 ft = *it;
-                m_fibers.erase(it);
+                m_fibers.erase(it++);
 
                 break;
             }
+
+            tickle_me |= it != m_fibers.end();
+
             // 此处注意解锁，不然后面idle协程调用stopping()函数判断的时候
             // 拿不到锁，导致死锁
             lock.unlock();
-
 
             if (tickle_me) {
                 tickle();
@@ -229,9 +243,11 @@ namespace sylar {
                         // 则重新把该协程丢进协程队列
                         schedule((*it_fiber));
                     } else if ((*it_fiber)->getState() != Fiber::TERM
-                               || (*it_fiber)->getState() != Fiber::EXCPT)
+                               && (*it_fiber)->getState() != Fiber::EXCPT)
                     {
                         // 如果该协程还没有结束，则设为挂起状态
+                        SYLAR_LOG_DEBUG(g_logger) << "Change state to HOLD in fiber_run, id="
+                            << (*it_fiber)->getId();
                         (*it_fiber)->setState(Fiber::HOLD);
                     }
                     ft.reset();
@@ -262,6 +278,8 @@ namespace sylar {
                 // 如果是回调
                 // 则用cb_fiber来接收这个回调
                 auto it_cb = std::get_if<1>(&ft.fiber_or_cb);
+                //Fiber::ptr cb_fiber(new Fiber(*it_cb));
+
                 if (cb_fiber) {
                     // 如果cb_fiber已经初始化过
                     cb_fiber->reset(*it_cb);
@@ -279,14 +297,17 @@ namespace sylar {
                 } else if (cb_fiber->getState() == Fiber::TERM
                            || cb_fiber->getState() == Fiber::EXCPT)
                 {
-                    // 该协程已经结束
+                    // 该协程的任务已经结束
                     cb_fiber->reset(nullptr);
                 } else {
+                    // 该协程任务还没结束，只是被挂起了
+                    //SYLAR_LOG_DEBUG(g_logger) << "Change state to HOLD in run, id=" << cb_fiber->getId();
                     cb_fiber->setState(Fiber::HOLD);
+                    cb_fiber.reset();
                 }
 
             } else {
-                SYLAR_LOG_DEBUG(g_logger) << "idle fiber state: " << idle_fiber->getState();
+                //SYLAR_LOG_DEBUG(g_logger) << "idle fiber state: " << idle_fiber->getState();
                 // 如果啥都不是，则用空闲协程占着cpu
                 if (idle_fiber->getState() == Fiber::TERM) {
                     SYLAR_LOG_DEBUG(g_logger) << "idle fibber died";
@@ -327,6 +348,9 @@ namespace sylar {
     bool Scheduler::stopping()
     {
         MutexType::Lock lock(m_mutex);
+        //SYLAR_LOG_DEBUG(g_logger) << "Scheduler stopping, m_stopping=" << m_stopping
+        //    << " m_fibers.size=" << m_fibers.size() << " active_thread_count="
+        //    << m_active_thread_count;
         return m_auto_stop && m_stopping
                            && m_fibers.empty()
                            && m_active_thread_count == 0;

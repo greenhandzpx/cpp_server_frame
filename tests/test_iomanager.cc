@@ -2,9 +2,7 @@
 #include "sylar/iomanager.h"
 
 #include <fcntl.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <unistd.h>
 #include <arpa/inet.h>
 
 sylar::Logger::ptr g_logger = SYLAR_LOGGER_ROOT();
@@ -40,9 +38,22 @@ void test_fiber()
     }
 }
 
+void test_timer()
+{
+    sylar::IOManager iom_for_timer(1, true, "Timer_iom");
+    sylar::Timer::ptr timer = iom_for_timer.add_timer(1000, [&timer](){
+        static int count = 0;
+        ++count;
+        SYLAR_LOG_INFO(g_logger) << "I'm a timer!";
+        if (count == 3) {
+            timer->cancel();
+        }
+    }, true);
+}
+
 int main()
 {
-    sylar::IOManager iom(1, true, "Dummy");
-    iom.schedule(&test_fiber);
-
+//    sylar::IOManager iom(1, true, "Dummy");
+//    iom.schedule(&test_fiber);
+    test_timer();
 }

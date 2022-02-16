@@ -50,10 +50,10 @@ namespace sylar {
         uint64_t getId() const { return m_id; }
         // 返回该协程的状态
         State getState() const { return m_state; }
-        void setState(State state)
-        {
-            m_state = state;
-        }
+        void setState(State state);
+//        {
+//            m_state = state;
+//        }
     public:
         // 设置当前协程
         static void SetThis(Fiber* f);

@@ -11,6 +11,17 @@
 namespace sylar {
 
 
+    static LogLevel::Level& G_Level()
+    {
+        static LogLevel::Level S_level = LogLevel::DEBUG;
+        return S_level;
+    }
+
+    void Filter(LogLevel::Level level)
+    {
+        G_Level() = level;
+    }
+
     LogEvent::LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level
                         , const char* file, int32_t line
                         , uint32_t elapse, uint32_t threadId, std::string threadName
@@ -344,7 +355,7 @@ namespace sylar {
         return ss.str();
     }
 
-    void Logger::log(LogLevel::Level level, LogEvent::ptr event)
+    void Logger::log(LogLevel::Level level, const LogEvent::ptr& event)
     {
         if (level >= m_level) {
             auto self = shared_from_this();
@@ -389,7 +400,7 @@ namespace sylar {
 
     void StdoutLogAppender::log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event)
     {
-        if (level >= m_level) {
+        if (level >= m_level && level >= G_Level()) {
             Mutex::Lock lock(m_mutex);
             //std::cout << event->getTime() << std::endl;
             m_formatter->format(std::cout, logger, level, event);
@@ -441,7 +452,7 @@ namespace sylar {
 
     void FileLogAppender::log(std::shared_ptr<Logger> logger, LogLevel::Level level, LogEvent::ptr event)
     {
-        if (level >= m_level) {
+        if (level >= m_level && level >= G_Level()) {
             // 每次log一条日志就reopen一次，防止文件中途被删掉
             reopen();
             Mutex::Lock lock(m_mutex);

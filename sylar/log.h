@@ -182,6 +182,7 @@ protected:
 
 
 class LoggerManager;
+
 // 日志器
 class Logger: public std::enable_shared_from_this<Logger> { // 以便于使用指向自身的智能指针
 friend class LoggerManager;
@@ -189,7 +190,7 @@ public:
     typedef std::shared_ptr<Logger> ptr;
 
     explicit Logger(std::string  name = "root");
-    void log( LogLevel::Level level, LogEvent::ptr event);
+    void log( LogLevel::Level level, const LogEvent::ptr& event);
 
     void debug(LogEvent::ptr event);
     void info(LogEvent::ptr event);
@@ -263,6 +264,11 @@ private:
 };
 
 typedef sylar::Singleton<LoggerManager> LoggerMgr;
+
+// G_Level用来表示全局的日志等级
+// Filter用来控制全局日志等级
+static LogLevel::Level& G_Level();
+void Filter(LogLevel::Level level);
 
 }
 

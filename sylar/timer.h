@@ -16,10 +16,6 @@ namespace sylar {
 
     public:
         typedef std::shared_ptr<Timer> ptr;
-    private:
-        Timer(uint64_t ms, std::function<void()> cb,
-              bool recurring, TimerManager* manager);
-        explicit Timer(uint64_t next_time); // 该构造函数用来构造一个用来从set里取timer的timer
 
         // 取消该计时器
         bool cancel();
@@ -27,6 +23,13 @@ namespace sylar {
         bool refresh();
         // 重置计时器（执行周期或者执行时间）
         bool reset(uint64_t ms, bool from_now);
+
+    private:
+        Timer(uint64_t ms, std::function<void()> cb,
+              bool recurring, TimerManager* manager);
+        explicit Timer(uint64_t next_time); // 该构造函数用来构造一个用来从set里取timer的timer
+
+
     private:
         bool m_recurring = false; // 是否循环使用定时器
         uint64_t m_ms = 0; // 执行周期
@@ -51,7 +54,7 @@ namespace sylar {
 
         Timer::ptr add_timer(uint64_t ms, std::function<void()> cb,
                              bool recurring = false);
-        Timer::ptr add_timer(Timer::ptr timer);
+        Timer::ptr add_timer(Timer::ptr timer, RWMutexType::WriteLock& lock);
         Timer::ptr add_condition_timer(uint64_t ms, std::function<void()> cb,
                                        std::weak_ptr<void> weak_cond,
                                        bool recurring = false);

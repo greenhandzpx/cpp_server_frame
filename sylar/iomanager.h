@@ -65,6 +65,8 @@ namespace sylar {
     protected:
         void context_resize(size_t size);
 
+        bool stopping(uint64_t& timeout);
+
         void tickle() override;
         bool stopping() override;
         void idle() override;
