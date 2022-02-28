@@ -196,6 +196,8 @@ public:
         RWMutex::ReadLock lock(m_mutex);
         return m_val;
     }
+
+    // 在设置新配置项的时候会触发回调
     void setValue(const T& new_val)
     {
         {
@@ -253,7 +255,7 @@ public:
     template<class T>
     static typename ConfigVar<T>::ptr Lookup(const std::string& name, 
                                             const T& default_value, 
-                                            const std::string& descripton = "")
+                                            const std::string& description = "")
     {
         RWMutex::WriteLock lock(GetMutex());
         auto it = GetDatas().find(name);
@@ -277,7 +279,7 @@ public:
             throw std::invalid_argument(name);
         }
 
-        typename ConfigVar<T>::ptr v(new ConfigVar<T>(name, default_value, descripton));
+        typename ConfigVar<T>::ptr v(new ConfigVar<T>(name, default_value, description));
         GetDatas()[name] = v;
         return v;
     }

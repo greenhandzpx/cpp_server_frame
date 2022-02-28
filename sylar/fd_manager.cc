@@ -8,42 +8,42 @@ namespace sylar {
 
     FdCtx::FdCtx(int fd) : m_fd(fd) {}
 
-    FdCtx::~FdCtx() {}
+    FdCtx::~FdCtx() = default;
 
     bool FdCtx::init() {
-//        if (m_isInit) {
-//            return true;
-//        }
-//        m_recv_timeout = -1;
-//        m_send_timeout = -1;
-//
-//        struct stat fd_stat{};
-//        // 查看m_fd这个文件描述符的状态
-//        if (-1 == fstat(m_fd, &fd_stat)) {
-//            // 查看失败
-//            m_isInit = false;
-//            m_isSocket = false;
-//        } else {
-//            m_isInit = true;
-//            // 判断是不是socket描述符
-//            m_isSocket = S_ISSOCK(fd_stat.st_mode);
-//        }
-//        if (m_isSocket) {
-//            // 获取m_fd的相关信息
-//            int flags = fcntl_f(m_fd, F_GETFL, 0);
-//            if (!(flags & O_NONBLOCK)) {
-//                // 如果不是非阻塞
-//                fcntl_f(m_fd, F_SETFL, flags | O_NONBLOCK);
-//                m_sys_nonblock = true;
-//            } else {
-//                m_sys_nonblock = true;
-//            }
-//        }
-//
-//        m_user_nonblock = false;
-//        m_isClosed = false;
-//
-//        return m_isInit;
+        if (m_isInit) {
+            return true;
+        }
+        m_recv_timeout = -1;
+        m_send_timeout = -1;
+
+        struct stat fd_stat{};
+        // 查看m_fd这个文件描述符的状态
+        if (-1 == fstat(m_fd, &fd_stat)) {
+            // 查看失败
+            m_isInit = false;
+            m_isSocket = false;
+        } else {
+            m_isInit = true;
+            // 判断是不是socket描述符
+            m_isSocket = S_ISSOCK(fd_stat.st_mode);
+        }
+        if (m_isSocket) {
+            // 获取m_fd的相关信息
+            int flags = fcntl_f(m_fd, F_GETFL, 0);
+            if (!(flags & O_NONBLOCK)) {
+                // 如果不是非阻塞
+                fcntl_f(m_fd, F_SETFL, flags | O_NONBLOCK);
+                m_sys_nonblock = true;
+            } else {
+                m_sys_nonblock = true;
+            }
+        }
+
+        m_user_nonblock = false;
+        m_isClosed = false;
+
+        return m_isInit;
     }
 
     bool FdCtx::close() {
