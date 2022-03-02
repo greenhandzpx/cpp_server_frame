@@ -23,7 +23,7 @@ int main()
 {
     //sylar::Set_S_Level()
 
-    sylar::LogLevel::Level level(sylar::LogLevel::INFO);
+    //sylar::LogLevel::Level level(sylar::LogLevel::INFO);
     sylar::Filter(sylar::LogLevel::INFO);
     test_hook();
 }

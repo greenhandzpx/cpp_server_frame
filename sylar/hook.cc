@@ -14,7 +14,7 @@ static Logger::ptr g_logger = SYLAR_LOG_NAME("system");
 
 // 定义一个配置项
 static ConfigVar<int>::ptr g_tcp_connect_timeout =
-    Config::Lookup("tcp connect timeout", 5000, "tcp connect timeout");
+    Config::Lookup("tcp_connect_timeout", 5000, "tcp connect timeout");
 
 static thread_local bool t_hook_enable = false;
 

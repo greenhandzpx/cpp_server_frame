@@ -12,7 +12,7 @@ include_directories(.)
 # 添加yaml-cpp头文件
 include_directories(/home/greenhandzpx/Downloads/yaml-cpp/include)
 # 添加yaml-cpp库文件(.so)
-link_libraries(/home/greenhandzpx/Downloads/yaml-cpp/build/libyaml-cpp.so)
+link_libraries(/home/greenhandzpx/Downloads/yaml-cpp/build/libyaml-cpp.a)
 #target_link_libraries(Sylar, -lyaml-cpp)
 
 
